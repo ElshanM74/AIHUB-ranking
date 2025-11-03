@@ -27,3 +27,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           python pipeline/pipeline/pipeline.py
+          # Save results to a stable path inside the repo
+output_path = "pipeline/classified.csv"
+df.to_csv(output_path, index=False)
+print(f"✅ Classification complete. Results saved to {output_path}")
