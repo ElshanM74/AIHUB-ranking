@@ -37,7 +37,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           echo "🚀 Starting pipeline..."
-          python ./pipeline/pipeline.py
+          python pipeline.py
           echo "✅ Pipeline completed."
 
       - name: Save results (artifact only)
