@@ -6,6 +6,7 @@ from openai import OpenAI
 
 # Корень репозитория (где лежит этот файл)
 BASE = Path(__file__).resolve().parent
+PROCESSED.mkdir(parents=True, exist_ok=True)
 
 # Подкаталоги для данных
 RAW = BASE / "pipeline" / "raw"
