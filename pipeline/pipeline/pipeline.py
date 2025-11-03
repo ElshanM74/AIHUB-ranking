@@ -1,18 +1,22 @@
 import os
 from pathlib import Path
 from datetime import date
-
 import pandas as pd
 from openai import OpenAI
 
-from fetch_etender import fetch_period, build_master_csv
+# Корень репозитория (где лежит этот файл)
+BASE = Path(__file__).resolve().parent
 
-# Базовые папки внутри репозитория
-BASE = Path(__file__).resolve().parents[1]
+# Подкаталоги для данных
 RAW = BASE / "pipeline" / "raw"
 PROCESSED = BASE / "pipeline" / "processed"
+RAW.mkdir(parents=True, exist_ok=True)
+PROCESSED.mkdir(parents=True, exist_ok=True)
 
-# Параметры периода из env (по умолчанию: 2022 … текущий год)
+# Импортируем сборщик из подпапки pipeline/
+from pipeline.fetch_etender import fetch_period, build_master_csv
+
+# Период (по умолчанию: 2022 … текущий год)
 START_YEAR = int(os.getenv("START_YEAR", "2022"))
 END_YEAR = int(os.getenv("END_YEAR", str(date.today().year)))
 
@@ -40,6 +44,10 @@ def main():
     print(f"[ok] master CSV saved: {master_csv}")
 
     # 2) Классифицируем (если есть строки)
+    if not master_csv.exists():
+        print(f"[warn] master CSV not found: {master_csv}")
+        return
+
     df = pd.read_csv(master_csv)
     if len(df) == 0:
         print("[info] master is empty — nothing to classify (OK).")
@@ -48,7 +56,7 @@ def main():
         print(f"[ok] empty classified saved: {out_csv}")
         return
 
-    # Если у df нет столбца 'title', скорректируй ниже имя колонки.
+    # выбираем колонку с текстом
     text_col = "title" if "title" in df.columns else df.columns[0]
     df["Category"] = df[text_col].fillna("").astype(str).apply(classify_text)
 
