@@ -1,30 +1,24 @@
-name: Run AI-Hub Ranking
+import os
+import pandas as pd
+from openai import OpenAI
 
-on:
-  workflow_dispatch:
-  push:
-    branches: [ main ]
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+def classify_text(text: str) -> str:
+    prompt = f"Classify this procurement item into one of these categories: [SOFT, HARD, INT, CLOUD, TRAIN, SEC, OFFICE, OTHER]. Return ONLY the label. Text: {text}"
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
+    )
+    return response.choices[0].message.content.strip().upper()
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+# Load the data
+df = pd.read_csv("procurements.csv")
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
+# Apply classification
+df["Category"] = df["Description"].apply(classify_text)
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Run pipeline
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          python pipeline/pipeline/pipeline.py
+# Save the result
+df.to_csv("classified.csv", index=False)
+print("✅ Classification complete. Results saved to classified.csv")
