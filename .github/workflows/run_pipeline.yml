@@ -24,19 +24,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run pipeline
+      - name: Run pipeline script
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          python pipeline/pipeline.py
+          cd pipeline
+          echo "Running from $(pwd)"
+          python pipeline.py
 
-      - name: List files (debug)
-        run: |
-          echo "PWD=$(pwd)"
-          ls -la
-          ls -la pipeline || true
-
-      - name: Upload results (any CSV found)
+      - name: Upload results (if any CSV found)
         uses: actions/upload-artifact@v4
         with:
           name: ai-hub-results
