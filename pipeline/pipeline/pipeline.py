@@ -1,56 +1,56 @@
-from pathlib import Path
-import pandas as pd
-from openai import OpenAI
-import os
+name: Run AI-Hub Ranking
 
-BASE = Path(__file__).resolve().parents[1]
-RAW = BASE / "data" / "raw"
-PROC = BASE / "data" / "processed"
-REPT = BASE / "data" / "reports"
-for p in [RAW, PROC, REPT]:
-    p.mkdir(parents=True, exist_ok=True)
+on:
+  workflow_dispatch:
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-DIGITAL = {"SOFT", "INT", "CLOUD", "SEC", "TRAIN"}
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-def classify_text(text: str) -> str:
-    prompt = ("Classify this procurement item into one of "
-              "[SOFT, HARD, INT, CLOUD, TRAIN, SEC, OFFICE, OTHER]. "
-              "Return ONLY the label.\nText: " + str(text))
-    r = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0
-    )
-    return r.choices[0].message.content.strip().upper()
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-def step_classify(input_csv="all_raw.csv"):
-    df = pd.read_csv(RAW / input_csv)
-    if "description" not in df.columns:
-        raise RuntimeError("Нужна колонка 'description'")
-    if "ministry" not in df.columns:
-        df["ministry"] = "UNKNOWN"
-    df["Category"] = df["description"].astype(str).apply(classify_text)
-    df.to_csv(PROC / "classified.csv", index=False)
-    return df
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-def step_aggregate():
-    df = pd.read_csv(PROC / "classified.csv")
-    by_m = df.groupby("ministry")
-    total = by_m.size().rename("Total")
-    digital = by_m.apply(lambda x: x["Category"].isin(DIGITAL).sum()).rename("Digital")
-    office = by_m.apply(lambda x: (x["Category"] == "OFFICE").sum()).rename("Office")
-    out = pd.concat([total, digital, office], axis=1).reset_index()
-    out["DigitalShare"] = (out["Digital"] / out["Total"]).round(3)
-    out["PaperPenalty"] = (out["Office"] / out["Total"]).round(3)
-    out["Score"] = (out["DigitalShare"] * 100 - out["PaperPenalty"] * 20).round(1)
-    out.sort_values("Score", ascending=False).to_csv(REPT / "ranking.csv", index=False)
-    return out
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-def main():
-    step_classify()
-    res = step_aggregate()
-    print("Top-10:\n", res.head(10))
+      - name: Run classification
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python - <<'EOF'
+          import os
+          import pandas as pd
+          from openai import OpenAI
 
-if __name__ == "__main__":
-    main()
+          client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+          df = pd.read_csv("procurements.csv")
+
+          def classify(text):
+              prompt = f"Classify this procurement item into one of these categories: [HARDWARE, SOFTWARE, IT, SECURITY, TRAINING]"
+              response = client.chat.completions.create(
+                  model="gpt-3.5-turbo",
+                  messages=[{"role": "user", "content": text + ' ' + prompt}],
+                  temperature=0
+              )
+              return response.choices[0].message.content.strip()
+
+          df["Category"] = df["Description"].apply(classify)
+          df.to_csv("classified.csv", index=False)
+          print("✅ Classification complete and saved to classified.csv")
+          EOF
+
+      - name: Upload result to repository
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update classified results"
+          branch: main
+          file_pattern: "*.csv"
