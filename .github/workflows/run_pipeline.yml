@@ -31,7 +31,7 @@ jobs:
           START_YEAR: '2022'         # при необходимости поменяй
           END_YEAR: '${{ vars.END_YEAR || 2025 }}'  # можно задать в Repository Variables
         run: |
-          python pipeline/pipeline.py
+          python pipeline/pipeline/pipeline.py
 
       - name: Upload results (artifact)
         uses: actions/upload-artifact@v4
