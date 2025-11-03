@@ -1,5 +1,6 @@
-pandas
-openai
+pandas==2.2.2
+openai==1.0.0
+python-dotenv==1.0.1
 requests
 beautifulsoup4
 lxml
