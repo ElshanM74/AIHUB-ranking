@@ -21,20 +21,28 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run pipeline script
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          echo "Current folder: $(pwd)"
-          ls -R
-          python ./pipeline/pipeline/pipeline.py
+          cd pipeline
+          python pipeline.py
+          cd ..
 
-      - name: Upload results (if any CSV found)
+      - name: Commit and push results
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git add pipeline/classified.csv
+          git commit -m "Add classified results"
+          git push
+        continue-on-error: true
+
+      - name: Upload results (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: ai-hub-results
-          path: |
-            **/*.csv
+          path: pipeline/classified.csv
