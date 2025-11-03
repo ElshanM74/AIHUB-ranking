@@ -154,7 +154,7 @@ def build_master_csv():
 def fetch_period(start_date: str, end_date: str, base_url: str):
     """Качаем помесячно от start_date до end_date включительно."""
     start = datetime(int(start_date), 1, 1).date()
-    end = datetime.fromisoformat(end_date).date()
+    end = datetime(int(end_date), 12, 31).date()
     cur = start.replace(day=1)
     while cur <= end:
         fetch_month(cur.year, cur.month, base_url=base_url)
