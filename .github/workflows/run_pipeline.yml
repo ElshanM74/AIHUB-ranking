@@ -27,4 +27,5 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          python pipeline/pipeline.py
+run: |
+  python pipeline/pipeline/pipeline.py
