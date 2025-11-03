@@ -19,6 +19,7 @@ df = pd.read_csv("procurements.csv")
 # Apply classification
 df["Category"] = df["Description"].apply(classify_text)
 
-# Save the result
-df.to_csv("classified.csv", index=False)
-print("✅ Classification complete. Results saved to classified.csv")
+# Save results to root folder for GitHub visibility
+output_path = "../classified_results.csv"
+df.to_csv(output_path, index=False)
+print(f"✅ Classification complete. Results saved to {output_path}")
