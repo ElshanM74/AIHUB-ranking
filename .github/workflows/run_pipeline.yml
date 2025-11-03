@@ -29,7 +29,8 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           cd pipeline
-          echo "Running from $(pwd)"
+          pwd
+          ls -la
           python pipeline.py
 
       - name: Upload results (if any CSV found)
