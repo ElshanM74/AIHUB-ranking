@@ -1,9 +1,9 @@
 name: Run AI-Hub Ranking
 
 on:
-  workflow_dispatch:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -26,8 +26,21 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          python pipeline/pipeline/pipeline.py
-          # Save results to a stable path inside the repo
-output_path = "pipeline/classified.csv"
-df.to_csv(output_path, index=False)
-print(f"✅ Classification complete. Results saved to {output_path}")
+          python pipeline/pipeline.py
+
+      - name: List files (debug)
+        run: |
+          echo "PWD=$(pwd)"
+          ls -la
+          echo "---- pipeline/ ----"
+          ls -la pipeline || true
+
+      - name: Upload results (any CSV found)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-hub-results
+          path: |
+            pipeline/*.csv
+            *.csv
+          if-no-files-found: error
+          retention-days: 7
