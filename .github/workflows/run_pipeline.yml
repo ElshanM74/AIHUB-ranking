@@ -32,12 +32,7 @@ jobs:
           cd pipeline/pipeline
           python pipeline.py
 
-           - name: Save results (artifact only)
-        uses: actions/upload-artifact@v4
-        with:
-          name: ai-hub-results
-          path: pipeline/pipeline/*.csv
-      - name: Upload results (artifact)
+      - name: Save results (artifact only)
         uses: actions/upload-artifact@v4
         with:
           name: ai-hub-results
