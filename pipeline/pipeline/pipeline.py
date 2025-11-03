@@ -8,8 +8,8 @@ from openai import OpenAI
 from fetch_etender import fetch_period, build_master_csv
 
 # Настройка OpenAI клиента
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
+import openai
+openai.api_key = os.getenv("OPENAI_API_KEY")
 # Базовая папка проекта
 BASE = Path(__file__).resolve().parent
 RAW = BASE / "raw"
@@ -30,7 +30,7 @@ def classify_text(text: str) -> str:
         f"[SOFT, HARD, INT, CLOUD, TRAIN, SEC, OFFICE, OTHER]. "
         f"RETURN ONLY the label.\nText: {text}"
     )
-    r = client.chat.completions.create(
+    r = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": prompt}],
         temperature=0,
