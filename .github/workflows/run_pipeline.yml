@@ -1,6 +1,9 @@
 name: Run AI-Hub Ranking
 
 on:
+  schedule:
+    - cron: '0 3 * * *'   # каждый день в 03:00 UTC = 07:00 Баку
+  workflow_dispatch:
   push:
     branches:
       - main
