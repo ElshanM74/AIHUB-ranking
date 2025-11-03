@@ -32,13 +32,13 @@ jobs:
           echo "📁 Files in this directory:"
           ls -R
 
-      - name: Run pipeline
+            - name: Run pipeline
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           PYTHONPATH: ${{ github.workspace }}
         run: |
           echo "🚀 Starting pipeline..."
-          cd pipeline
+          cd pipeline/pipeline
           ls -la
           python3 pipeline.py
           echo "✅ Pipeline completed."
