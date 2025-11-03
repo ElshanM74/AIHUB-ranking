@@ -28,21 +28,20 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          cd pipeline
+          cd pipeline/pipeline
           python pipeline.py
-          cd ..
+          cd ../..
 
       - name: Commit and push results
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "actions@github.com"
-          git add pipeline/classified.csv
-          git commit -m "Add classified results"
-          git push
-        continue-on-error: true
+          git add pipeline/pipeline/classified.csv || true
+          git commit -m "Add classified results" || true
+          git push || true
 
       - name: Upload results (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: ai-hub-results
-          path: pipeline/classified.csv
+          path: pipeline/pipeline/classified.csv
