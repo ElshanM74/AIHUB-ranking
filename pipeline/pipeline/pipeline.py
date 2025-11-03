@@ -14,7 +14,7 @@ RAW.mkdir(parents=True, exist_ok=True)
 PROCESSED.mkdir(parents=True, exist_ok=True)
 
 # Импортируем сборщик из подпапки pipeline/
-from pipeline.fetch_etender import fetch_period, build_master_csv
+from fetch_etender import fetch_period, build_master_csv
 
 # Период (по умолчанию: 2022 … текущий год)
 START_YEAR = int(os.getenv("START_YEAR", "2022"))
