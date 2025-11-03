@@ -28,10 +28,9 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          cd pipeline
-          pwd
+          echo "Current folder: $(pwd)"
           ls -la
-          python pipeline.py
+          python pipeline/pipeline.py
 
       - name: Upload results (if any CSV found)
         uses: actions/upload-artifact@v4
