@@ -21,20 +21,19 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Run pipeline
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          python ./pipeline/pipeline.py
+          python pipeline.py
 
       - name: List files (debug)
         run: |
           echo "PWD=$(pwd)"
           ls -la
-          echo "---- pipeline/ ----"
           ls -la pipeline || true
 
       - name: Upload results (any CSV found)
@@ -42,7 +41,4 @@ jobs:
         with:
           name: ai-hub-results
           path: |
-            pipeline/*.csv
-            *.csv
-          if-no-files-found: error
-          retention-days: 7
+            **/*.csv
