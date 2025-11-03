@@ -1,19 +1,19 @@
 name: Run AI-Hub Ranking
 
 on:
-  schedule:
-    - cron: '0 3 * * *'   # каждый день в 03:00 UTC = 07:00 Баку
-  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'  # ежедневно 03:00 UTC (07:00 Баку)
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -22,18 +22,20 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run pipeline script
+      - name: Run pipeline
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          START_YEAR: '2022'         # при необходимости поменяй
+          END_YEAR: '${{ vars.END_YEAR || 2025 }}'  # можно задать в Repository Variables
         run: |
-          cd pipeline/pipeline
-          python pipeline.py
+          python pipeline/pipeline.py
 
-      - name: Save results (artifact only)
+      - name: Upload results (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: ai-hub-results
-          path: pipeline/pipeline/*.csv
+          path: pipeline/processed
+          if-no-files-found: warn
