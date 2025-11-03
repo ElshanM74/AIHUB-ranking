@@ -32,14 +32,14 @@ jobs:
           echo "📂 Files in this directory:"
           ls -R
 
-      - name: Run pipeline
+            - name: Run pipeline
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           echo "🚀 Starting pipeline..."
           python pipeline.py
           echo "✅ Pipeline completed."
-
       - name: Save results (artifact only)
         uses: actions/upload-artifact@v4
         with:
