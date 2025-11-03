@@ -1,166 +1,139 @@
-import os
-import time
-import csv
-import re
-from datetime import datetime, timedelta
+from __future__ import annotations
+
+import json
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Dict, List
 
 import requests
-from bs4 import BeautifulSoup
-import pandas as pd
 
-BASE = Path(__file__).resolve().parents[2]  # корень репозитория
-RAW_DIR = BASE / "data" / "raw"
-RAW_DIR.mkdir(parents=True, exist_ok=True)
+# ==============================
+# НАСТРОЙКИ HTTP API (интернет)
+# ==============================
+# Это примерный endpoint. Если он другой — просто поменяй строку ниже.
+BASE_API = "https://etender.gov.az/api/v2/tenders"
 
+# Заголовки (при необходимости можно дополнить)
 HEADERS = {
-    "User-Agent": "AI-Hub Azerbaijan (contact: info@ai-hub.az) - academic/research use"
+    "Accept": "application/json, */*;q=0.8",
+    "User-Agent": "aihub-bot/1.0 (+github actions)",
+    "Connection": "keep-alive",
 }
 
-def _clean_text(s: str) -> str:
-    return re.sub(r"\s+", " ", (s or "").strip())
-
-def _parse_list_page(html: str):
-    """Возвращает список тендеров с одной страницы."""
-    soup = BeautifulSoup(html, "html.parser")
-    rows = soup.select("table tbody tr")
-    items = []
-    for r in rows:
-        cols = r.find_all("td")
-        if len(cols) < 4:
-            continue
-        tender_no = _clean_text(cols[0].get_text())
-        org = _clean_text(cols[1].get_text())
-        desc = _clean_text(cols[2].get_text())
-        deadline = _clean_text(cols[3].get_text())
-        # если есть ссылка на детали (для суммы/категории) — собираем
-        link = cols[0].find("a")
-        href = link["href"] if link and link.has_attr("href") else None
-        items.append({
-            "tender_no": tender_no,
-            "organization": org,
-            "Description": desc,
-            "deadline": deadline,
-            "detail_url": href
-        })
-    return items
-
-def _parse_detail_page(html: str):
-    """Пытаемся вытащить сумму/валюту/коды из карточки тендера (если есть)."""
-    soup = BeautifulSoup(html, "html.parser")
-    text = soup.get_text(" ", strip=True)
-    # простые эвристики (подкорректируем после первого прогона)
-    amount = None
-    currency = None
-    m = re.search(r"(?i)(\d[\d\s.,]{3,})\s*(AZN|USD|EUR|₼|\$|€)", text)
-    if m:
-        amount = m.group(1)
-        currency = m.group(2)
-    cpv = None
-    m2 = re.search(r"(?i)CPV[:\s]+([0-9]{8}-\d)", text)
-    if m2:
-        cpv = m2.group(1)
-    return {"amount_raw": amount, "currency_raw": currency, "cpv": cpv}
-
-def fetch_month(year: int, month: int, base_url: str, max_pages: int = 50, sleep_sec: float = 1.0):
+def make_url(page: int, date_from: str, date_to: str) -> str:
     """
-    Грузим страницы листинга за месяц (без «официального API» — HTML-парсинг).
-    Если у etender есть параметры даты/страниц — подставим их в base_url заранее.
+    Собираем HTTP-URL для запроса. Если у etender.gov.az другой формат
+    параметров, поменяй имена 'from'/'to' на нужные.
     """
-    all_items = []
-    for page in range(1, max_pages + 1):
-        # пример листинга; при необходимости подстрой: ?page={page}
-        url = f"{base_url}?page={page}"
-        r = requests.get(url, headers=HEADERS, timeout=30)
-        if r.status_code != 200:
-            break
-        items = _parse_list_page(r.text)
-        if not items:
-            break
+    return f"{BASE_API}?page={page}&from={date_from}&to={date_to}"
 
-        # фильтр на месяц по дедлайну, если в таблице есть даты в человекочитаемом формате
-        month_items = []
-        for it in items:
-            date_str = it.get("deadline")
-            # попытки распарсить дату (подкорректируем формат после первой проверки)
-            parsed = None
-            for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%d/%m/%Y"):
-                try:
-                    parsed = datetime.strptime(date_str, fmt).date()
-                    break
-                except Exception:
-                    pass
-            it["deadline_parsed"] = parsed
-            month_items.append(it)
 
-        # опционально фильтруем по месяцу, если парсинг даты удался
-        filtered = []
-        for it in month_items:
-            d = it.get("deadline_parsed")
-            if d and d.year == year and d.month == month:
-                filtered.append(it)
-            elif d is None:
-                # если дату не распознали — оставляем (чтобы не потерять)
-                filtered.append(it)
+# ==============================
+# КАЧАЕМ ДАННЫЕ ПО МЕСЯЦАМ
+# ==============================
 
-        all_items.extend(filtered)
-        time.sleep(sleep_sec)
+def fetch_month(cur_year: int, cur_month: int, save_dir: Path,
+                start: date, end: date, timeout: int = 30) -> List[Dict]:
+    """
+    Скачивает страницы за месяц [start; end], сохраняет JSON-страницы в save_dir,
+    возвращает список записей (items).
+    """
+    save_dir.mkdir(parents=True, exist_ok=True)
+    page = 1
+    all_items: List[Dict] = []
 
-    # обогащение (деталка) — осторожно, лимитируем запросы
-    out_rows = []
-    for it in all_items[:300]:  # ограничим, чтобы не злоупотреблять (настрой)
-        row = dict(it)
-        if it.get("detail_url"):
-            try:
-                detail_url = it["detail_url"]
-                if detail_url.startswith("/"):
-                    detail_url = "https://etender.gov.az" + detail_url
-                r2 = requests.get(detail_url, headers=HEADERS, timeout=30)
-                if r2.status_code == 200:
-                    detail = _parse_detail_page(r2.text)
-                    row.update(detail)
-                time.sleep(0.7)
-            except Exception:
-                pass
-        out_rows.append(row)
+    while True:
+        url = make_url(page, start.isoformat(), end.isoformat())
+        if not url.startswith("http"):
+            raise ValueError(f"Invalid API url: {url}")
 
-    df = pd.DataFrame(out_rows)
-    raw_path = RAW_DIR / f"tenders_{year}_{month:02d}.csv"
-    df.to_csv(raw_path, index=False)
-    return raw_path
-
-def build_master_csv():
-    """Склеиваем все raw CSV в единый procurements.csv (с дедупликацией по tender_no)."""
-    files = sorted(RAW_DIR.glob("tenders_*.csv"))
-    frames = []
-    for f in files:
         try:
-            frames.append(pd.read_csv(f))
-        except Exception:
-            pass
-    if not frames:
-        return None
-    df = pd.concat(frames, ignore_index=True)
-    if "tender_no" in df.columns:
-        df = df.drop_duplicates(subset=["tender_no"])
-    df.rename(columns={"organization": "ministry"}, inplace=True)
-    # минимальный набор полей для твоего классификатора
-    if "Description" not in df.columns:
-        df["Description"] = df.get("desc", "")
-    out_path = BASE / "procurements.csv"
-    df.to_csv(out_path, index=False)
-    return out_path
+            resp = requests.get(url, headers=HEADERS, timeout=timeout)
+        except requests.RequestException as e:
+            # Не падаем пайплайном; просто выходим из цикла
+            print(f"[warn] network error for {url}: {e}")
+            break
 
-def fetch_period(start_date: str, end_date: str, base_url: str):
-    """Качаем помесячно от start_date до end_date включительно."""
-    start = datetime(int(start_date), 1, 1).date()
-    end = datetime(int(end_date), 12, 31).date()
-    cur = start.replace(day=1)
-    while cur <= end:
-        fetch_month(cur.year, cur.month, base_url=base_url)
-        # следующий месяц
-        if cur.month == 12:
-            cur = cur.replace(year=cur.year + 1, month=1)
-        else:
-            cur = cur.replace(month=cur.month + 1)
-    return build_master_csv()
+        if resp.status_code != 200:
+            # Либо пусто, либо неверные параметры — считаем, что страниц больше нет
+            print(f"[info] stop on status {resp.status_code} for {url}")
+            break
+
+        try:
+            data = resp.json()
+        except Exception:
+            print(f"[warn] not a JSON for {url}, stop.")
+            break
+
+        # На разных API ключ может называться 'results' или 'items'
+        items = data.get("results") or data.get("items") or []
+        if not items:
+            print(f"[info] empty page {page} for {cur_year}-{cur_month:02d}")
+            break
+
+        # сохраняем страницу (для истории/отладки)
+        out = save_dir / f"{cur_year:04d}-{cur_month:02d}-p{page}.json"
+        out.write_text(json.dumps(items, ensure_ascii=False))
+
+        all_items.extend(items)
+        page += 1
+
+    return all_items
+
+
+def month_range(year: int, month: int) -> (date, date):
+    """Возвращает границы месяца [start, end]."""
+    start = date(year, month, 1)
+    if month == 12:
+        end = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end = date(year, month + 1, 1) - timedelta(days=1)
+    return start, end
+
+
+def fetch_period(start_year: int, end_year: int, raw_dir: Path) -> List[Dict]:
+    """
+    Проходит с января start_year до декабря end_year включительно.
+    Возвращает список всех записей за период.
+    """
+    all_rows: List[Dict] = []
+    for y in range(start_year, end_year + 1):
+        for m in range(1, 13):
+            start, end = month_range(y, m)
+            # Если месяц выходит за end_year — закончим после декабря end_year
+            if y == end_year and m == 12:
+                pass
+            rows = fetch_month(y, m, raw_dir, start, end)
+            if rows:
+                print(f"[info] {y}-{m:02d}: fetched {len(rows)} rows")
+                all_rows.extend(rows)
+    return all_rows
+
+
+def build_master_csv(items: List[Dict], out_csv: Path) -> None:
+    """
+    Простейшая сборка в CSV. Для реальной модели колонок подстрой ключи.
+    Если список пуст — создадим пустой CSV с заголовками.
+    """
+    import pandas as pd
+
+    if not items:
+        # Минимальные заголовки, чтобы файл существовал
+        df = pd.DataFrame(columns=["id", "title", "date", "amount", "buyer"])
+    else:
+        # Подстрой ключи под реальную структуру API
+        def norm(row: Dict) -> Dict:
+            return {
+                "id": row.get("id") or row.get("tender_id"),
+                "title": row.get("title") or row.get("name"),
+                "date": row.get("date") or row.get("published_at"),
+                "amount": row.get("amount") or row.get("value") or row.get("price"),
+                "buyer": (row.get("buyer") or row.get("procuringEntity") or {}).get("name")
+                        if isinstance(row.get("buyer") or row.get("procuringEntity"), dict)
+                        else row.get("buyer") or row.get("procuringEntity"),
+            }
+
+        df = pd.DataFrame([norm(x) for x in items])
+
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(out_csv, index=False)
