@@ -41,8 +41,8 @@ jobs:
           python pipeline.py
           echo "✅ Pipeline completed."
 
-      - name: Save results (artifact only)
-        uses: actions/upload-artifact@v3
+            - name: Save results (artifact only)
+        uses: actions/upload-artifact@v4
         with:
           name: ai-hub-results
           path: pipeline/processed/*.csv
