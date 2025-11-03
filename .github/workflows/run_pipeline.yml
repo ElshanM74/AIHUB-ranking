@@ -1,11 +1,9 @@
 name: Run AI-Hub Ranking
 
 on:
+  workflow_dispatch:
   schedule:
     - cron: '0 3 * * *' # каждый день в 03:00 UTC = 07:00 по Баку
-  workflow_dispatch:
-  push:
-    branches: [ main ]
 
 jobs:
   build:
@@ -27,19 +25,17 @@ jobs:
 
       - name: Debug folder structure
         run: |
-          echo "📂 Current directory:"
+          echo "📁 Current directory:"
           pwd
-          echo "📁 Files in this directory:"
+          echo "📂 Files in this directory:"
           ls -R
 
       - name: Run pipeline
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          PYTHONPATH: ${{ github.workspace }}
         run: |
           echo "🚀 Starting pipeline..."
           cd pipeline/pipeline
-          ls -la
           python3 pipeline.py
           echo "✅ Pipeline completed."
 
@@ -48,3 +44,4 @@ jobs:
         with:
           name: ai-hub-results
           path: pipeline/pipeline/processed/*.csv
+          if-no-files-found: ignore
