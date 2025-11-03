@@ -25,12 +25,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Debug folder structure
+        run: |
+          echo "📁 Current directory:"
+          pwd
+          echo "📂 Files in this directory:"
+          ls -R
+
       - name: Run pipeline
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           echo "🚀 Starting pipeline..."
-          python pipeline/pipeline.py
+          python ./pipeline/pipeline.py
           echo "✅ Pipeline completed."
 
       - name: Save results (artifact only)
