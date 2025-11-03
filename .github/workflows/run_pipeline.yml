@@ -39,7 +39,8 @@ jobs:
         run: |
           echo "🚀 Starting pipeline..."
           cd pipeline
-          python pipeline.py
+          ls -la
+          python3 pipeline.py
           echo "✅ Pipeline completed."
 
       - name: Save results (artifact only)
