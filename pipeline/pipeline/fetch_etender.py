@@ -1,3 +1,4 @@
+# pipeline/pipeline/fetch_etender.py
 from __future__ import annotations
 
 import os
@@ -9,42 +10,34 @@ from typing import Dict, List, Tuple, Optional
 
 import requests
 
-# ====== НАСТРОЙКИ API (можно переопределить через Secrets/Variables) ======
+
+# ==============================
+# НАСТРОЙКИ HTTP API
+# ==============================
 BASE_API = (os.getenv("ETENDER_BASE_API") or "https://etender.gov.az/api/v2/tenders").rstrip("/")
-DATE_FROM_PARAM = os.getenv("ETENDER_FROM_PARAM", "from")
-DATE_TO_PARAM   = os.getenv("ETENDER_TO_PARAM", "to")
-PAGE_PARAM      = os.getenv("ETENDER_PAGE_PARAM", "page")
-PAGE_START      = int(os.getenv("ETENDER_PAGE_START", "1"))
-PAGE_LIMIT      = int(os.getenv("ETENDER_PAGE_LIMIT", "200"))  # макс. страниц/мес (антифриз)
 
 HEADERS = {
-    "Accept": "application/json",
+    "Accept": "application/json, */*;q=0.8",
     "User-Agent": "aihub-bot/1.0 (+github actions)",
     "Connection": "keep-alive",
 }
 
+
 def make_url(page: int, date_from: str, date_to: str) -> str:
-    return f"{BASE_API}?{PAGE_PARAM}={page}&{DATE_FROM_PARAM}={date_from}&{DATE_TO_PARAM}={date_to}"
+    return f"{BASE_API}?page={page}&from={date_from}&to={date_to}"
 
-def month_range(year: int, month: int) -> Tuple[date, date]:
-    start = date(year, month, 1)
-    if month == 12:
-        end = date(year + 1, 1, 1) - timedelta(days=1)
-    else:
-        end = date(year, month + 1, 1) - timedelta(days=1)
-    return start, end
 
+# ==============================
+# КАЧАЕМ ДАННЫЕ ПО МЕСЯЦАМ
+# ==============================
 def fetch_month(cur_year: int, cur_month: int, save_dir: Path,
                 start: date, end: date, timeout: int = 30) -> List[Dict]:
     save_dir.mkdir(parents=True, exist_ok=True)
-    page = PAGE_START
+    page = 1
     all_items: List[Dict] = []
 
-    while page < PAGE_START + PAGE_LIMIT:
+    while True:
         url = make_url(page, start.isoformat(), end.isoformat())
-        if not url.startswith("http"):
-            print(f"[warn] invalid url built: {url}")
-            break
 
         try:
             resp = requests.get(url, headers=HEADERS, timeout=timeout)
@@ -67,16 +60,23 @@ def fetch_month(cur_year: int, cur_month: int, save_dir: Path,
             print(f"[info] empty page {page} for {cur_year}-{cur_month:02d}")
             break
 
-        # сохраняем страницу для аудита
-        (save_dir / f"{cur_year:04d}-{cur_month:02d}-p{page}.json").write_text(
-            json.dumps(items, ensure_ascii=False)
-        )
+        out = save_dir / f"{cur_year:04d}-{cur_month:02d}-p{page}.json"
+        out.write_text(json.dumps(items, ensure_ascii=False))
 
         all_items.extend(items)
         page += 1
-        time.sleep(0.2)  # бережный режим
 
     return all_items
+
+
+def month_range(year: int, month: int) -> (date, date):
+    start = date(year, month, 1)
+    if month == 12:
+        end = date(year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end = date(year, month + 1, 1) - timedelta(days=1)
+    return start, end
+
 
 def fetch_period(start_year: int, end_year: int, raw_dir: Path) -> List[Dict]:
     all_rows: List[Dict] = []
@@ -89,6 +89,7 @@ def fetch_period(start_year: int, end_year: int, raw_dir: Path) -> List[Dict]:
                 all_rows.extend(rows)
     return all_rows
 
+
 def build_master_csv(items: List[Dict], out_csv: Path) -> None:
     import pandas as pd
 
@@ -96,16 +97,16 @@ def build_master_csv(items: List[Dict], out_csv: Path) -> None:
         df = pd.DataFrame(columns=["id", "title", "date", "amount", "buyer"])
     else:
         def norm(row: Dict) -> Dict:
-            buyer = row.get("buyer") or row.get("procuringEntity")
-            if isinstance(buyer, dict):
-                buyer = buyer.get("name")
             return {
                 "id": row.get("id") or row.get("tender_id"),
                 "title": row.get("title") or row.get("name"),
                 "date": row.get("date") or row.get("published_at"),
                 "amount": row.get("amount") or row.get("value") or row.get("price"),
-                "buyer": buyer,
+                "buyer": (row.get("buyer") or row.get("procuringEntity") or {}).get("name")
+                        if isinstance(row.get("buyer") or row.get("procuringEntity"), dict)
+                        else row.get("buyer") or row.get("procuringEntity"),
             }
+
         df = pd.DataFrame([norm(x) for x in items])
 
     out_csv.parent.mkdir(parents=True, exist_ok=True)
