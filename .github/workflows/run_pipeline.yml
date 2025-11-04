@@ -3,12 +3,11 @@ name: Run AI-Hub Ranking
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *' # каждый день в 03:00 UTC = 07:00 по Баку
+    - cron: '0 3 * * *'   # каждый день в 03:00 UTC (07:00 по Баку)
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -27,19 +26,23 @@ jobs:
 
       - name: Debug folder structure
         run: |
-          echo "📁 Current directory:"
-          pwd
-          echo "📄 Files in this directory:"
-          ls -R
+          echo "📂 Current directory:" && pwd
+          echo "📄 Files:" && ls -la
+          echo "./pipeline/pipeline:" && ls -la pipeline/pipeline || true
 
       - name: Run pipeline
+        env:
+          START_YEAR: "2022"
+          END_YEAR: "2025"
+          ETENDER_BASE_API: "https://etender.gov.az/api/v2/tenders"
         run: |
           echo "🚀 Starting pipeline..."
-          python3 pipeline/pipeline/pipeline.py
+          python pipeline/pipeline/pipeline.py
           echo "✅ Pipeline completed."
 
       - name: Save results (artifact only)
         uses: actions/upload-artifact@v4
         with:
           name: ai-hub-results
-          path: pipeline/pipeline/processed/*.csv
+          path: pipeline/processed/*.csv
+          if-no-files-found: warn
