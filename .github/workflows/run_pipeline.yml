@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -27,16 +29,13 @@ jobs:
         run: |
           echo "📁 Current directory:"
           pwd
-          echo "📂 Files in this directory:"
+          echo "📄 Files in this directory:"
           ls -R
 
       - name: Run pipeline
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           echo "🚀 Starting pipeline..."
-          cd pipeline/pipeline
-          python3 pipeline.py
+          python3 pipeline/pipeline/pipeline.py
           echo "✅ Pipeline completed."
 
       - name: Save results (artifact only)
@@ -44,4 +43,3 @@ jobs:
         with:
           name: ai-hub-results
           path: pipeline/pipeline/processed/*.csv
-          if-no-files-found: ignore
